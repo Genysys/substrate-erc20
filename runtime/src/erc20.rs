@@ -20,7 +20,7 @@ decl_module! {
           let sender = ensure_signed(_origin)?;
           ensure!(Self::is_init() == false, "Already Initialized");
 
-          <Balances<T>>::insert(sender.clone(), Self::total_supply());
+          <BalanceOf<T>>::insert(sender.clone(), Self::total_supply());
           <Owner<T>>::put(sender);
           <Init<T>>::put(true);
 
@@ -37,13 +37,13 @@ decl_module! {
       // if this is done, then transfer_from can be called with corresponding values
       fn approve(_origin, spender: T::AccountId, value: T::Balance) -> Result {
           let sender = ensure_signed(_origin)?;
-          ensure!(<Balances<T>>::exists(&sender), "Account does not own this token");
+          ensure!(<BalanceOf<T>>::exists(&sender), "Account does not own this token");
           Self::deposit_event(RawEvent::Approval(sender.clone(), spender.clone(), value));
 
-          if <Allowed<T>>::exists((sender.clone(), spender.clone())) {
-              <Allowed<T>>::mutate((sender, spender), |allowance| *allowance += value);
+          if <Allowance<T>>::exists((sender.clone(), spender.clone())) {
+              <Allowance<T>>::mutate((sender, spender), |allowance| *allowance += value);
           } else {
-              <Allowed<T>>::insert((sender, spender), value);
+              <Allowance<T>>::insert((sender, spender), value);
           }
 
           Ok(())
@@ -64,8 +64,8 @@ decl_storage! {
     Owner get(owner): T::AccountId;
     Name get(name) config(): Vec<u8>;
     Ticker get (ticker) config(): Vec<u8>;
-    Balances get(balance_of): map T::AccountId => T::Balance;
-    Allowed get(allowance): map (T::AccountId, T::AccountId) => T::Balance;
+    BalanceOf get(balance_of): map T::AccountId => T::Balance;
+    Allowance get(allowance): map (T::AccountId, T::AccountId) => T::Balance;
   }
 }
 
@@ -91,10 +91,10 @@ impl<T: Trait> Module<T> {
         to: T::AccountId,
         value: T::Balance,
     ) -> Result {
-        ensure!(<Allowed<T>>::exists((from.clone(), to.clone())), "Allowance does not exist.");
+        ensure!(<Allowance<T>>::exists((from.clone(), to.clone())), "Allowance does not exist.");
         ensure!(Self::allowance((from.clone(), to.clone())) >= value, "Not enough allowance.");
 
-        <Allowed<T>>::mutate((from.clone(), to.clone()), |allowance| *allowance -= value);
+        <Allowance<T>>::mutate((from.clone(), to.clone()), |allowance| *allowance -= value);
         Self::deposit_event(RawEvent::Approval(from.clone(), to.clone(), value));
 
         Self::_transfer(from, to, value)
@@ -105,21 +105,21 @@ impl<T: Trait> Module<T> {
         to: T::AccountId,
         value: T::Balance,
     ) -> Result {
-        ensure!(<Balances<T>>::exists(&from), "Account does not own this token");
+        ensure!(<BalanceOf<T>>::exists(from.clone()), "Account does not own this token");
 
-        let sender_balance = Self::balance_of(&from);
+        let sender_balance = Self::balance_of(from.clone());
         ensure!(sender_balance > value, "Not enough balance.");
 
         Self::deposit_event(RawEvent::Transfer(from.clone(), to.clone(), value));
         
         // reduce sender's balance
-        <Balances<T>>::mutate(from, |balance| *balance -= value);
+        <BalanceOf<T>>::mutate(from, |from_balance| *from_balance -= value);
 
         // increase receiver's balance
-        if <Balances<T>>::exists(to.clone()) {
-            <Balances<T>>::mutate(to, |balance| *balance += value);
+        if <BalanceOf<T>>::exists(to.clone()) {
+            <BalanceOf<T>>::mutate(to, |balance| *balance += value);
         } else {
-            <Balances<T>>::insert(to, value);
+            <BalanceOf<T>>::insert(to, value);
         }
 
         Ok(())
