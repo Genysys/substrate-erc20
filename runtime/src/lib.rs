@@ -214,7 +214,7 @@ construct_runtime!(
 		Indices: indices,
 		Balances: balances,
 		Sudo: sudo,
-		ERC20: erc20::{Module, Call, Storage, Event<T>},
+		Erc20: erc20::{Module, Call, Storage, Event<T>, Config<T>},
 	}
 );
 
