@@ -33,7 +33,7 @@ decl_module! {
       }
 
       // get the total supply of the token
-      fn totalSupply(_origin) {
+      fn total_supply(_origin) {
 
       }
 
