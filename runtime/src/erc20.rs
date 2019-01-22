@@ -16,12 +16,16 @@ decl_module! {
       // initialize the default event for this module
       fn deposit_event<T>() = default;
 
+      // initialize the token
+      // transfers the total_supply amout to the caller
+      // the token becomes usable
+      // not part of ERC20 standard interface
+      // replicates the ERC20 smart contract constructor functionality
       fn init(_origin) -> Result {
           let sender = ensure_signed(_origin)?;
           ensure!(Self::is_init() == false, "Already Initialized");
 
           <BalanceOf<T>>::insert(sender.clone(), Self::total_supply());
-          <Owner<T>>::put(sender);
           <Init<T>>::put(true);
 
           Ok(())
@@ -50,8 +54,15 @@ decl_module! {
       }
 
       // if approved, transfer from an account to another account without needed owner's signature
-      fn transfer_from(_origin, from: T::AccountId, to: T::AccountId, value: T::Balance) -> Result {
-          Self::_transfer_from(from, to, value)
+      // marked public so that it can be called from other modules
+      pub fn transfer_from(_origin, from: T::AccountId, to: T::AccountId, value: T::Balance) -> Result {
+        ensure!(<Allowance<T>>::exists((from.clone(), to.clone())), "Allowance does not exist.");
+        ensure!(Self::allowance((from.clone(), to.clone())) >= value, "Not enough allowance.");
+
+        <Allowance<T>>::mutate((from.clone(), to.clone()), |allowance| *allowance -= value);
+        Self::deposit_event(RawEvent::Approval(from.clone(), to.clone(), value));
+
+        Self::_transfer(from, to, value)
       }
   }
 }
@@ -59,16 +70,25 @@ decl_module! {
 // storage for this runtime module
 decl_storage! {
   trait Store for Module<T: Trait> as Erc20 {
+    // bool flag to allow init to be called only once
     Init get(is_init): bool;
+
+    // total supply of the token
+    // set in the genesis config
+    // see ../../src/chain_spec.rs - line 105
     TotalSupply get(total_supply) config(): T::Balance;
-    Owner get(owner): T::AccountId;
+    
+    // not really needed - name and ticker, but why not?
     Name get(name) config(): Vec<u8>;
     Ticker get (ticker) config(): Vec<u8>;
+
+    // standard balances and allowances mappings for ERC20 implementation
     BalanceOf get(balance_of): map T::AccountId => T::Balance;
     Allowance get(allowance): map (T::AccountId, T::AccountId) => T::Balance;
   }
 }
 
+// events
 decl_event!(
     pub enum Event<T> where AccountId = <T as system::Trait>::AccountId, Balance = <T as balances::Trait>::Balance {
         // event for transfer of tokens
@@ -80,26 +100,10 @@ decl_event!(
     }
 );
 
-// implementation of mudule
+// module implementation block
 // utility and private functions
 // if marked public, accessible by other modules
 impl<T: Trait> Module<T> {
-    // transfer from will be needed by other modules too
-    // hence implemented here
-    pub fn _transfer_from(
-        from: T::AccountId,
-        to: T::AccountId,
-        value: T::Balance,
-    ) -> Result {
-        ensure!(<Allowance<T>>::exists((from.clone(), to.clone())), "Allowance does not exist.");
-        ensure!(Self::allowance((from.clone(), to.clone())) >= value, "Not enough allowance.");
-
-        <Allowance<T>>::mutate((from.clone(), to.clone()), |allowance| *allowance -= value);
-        Self::deposit_event(RawEvent::Approval(from.clone(), to.clone(), value));
-
-        Self::_transfer(from, to, value)
-    }
-
     fn _transfer(
         from: T::AccountId,
         to: T::AccountId,
